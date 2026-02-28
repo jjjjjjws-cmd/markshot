@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>현장 사진 편집기</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #131313;
+  --surf: #1e1e1e;
+  --surf2: #272727;
+  --surf3: #313131;
+  --accent: #ff5733;
+  --text: #f0f0f0;
+  --text2: #888;
+  --border: #383838;
+}
+
+body {
+  font-family: 'Noto Sans KR', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ── 상단 툴바 ── */
+#toolbar {
+  background: var(--surf);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.sep {
+  width: 1px;
+  height: 28px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.tool-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text2);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.tool-btn .icon { font-size: 18px; line-height: 1; }
+.tool-btn:hover { background: var(--surf3); color: var(--text); }
+.tool-btn.active {
+  background: var(--surf3);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.action-btn {
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surf3);
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.action-btn:hover { background: #3d3d3d; }
+.action-btn:disabled { opacity: 0.3; cursor: default; }
+
+.btn-save {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  margin-left: auto;
+}
+.btn-save:hover { background: #e04020; }
+
+/* 색상 피커 */
+.color-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--text2);
+}
+#colorPicker {
+  width: 32px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px;
+  background: var(--surf3);
+  cursor: pointer;
+}
+
+/* 선 굵기 */
+.slider-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--text2);
+  min-width: 80px;
+}
+#thicknessSlider {
+  width: 80px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* 수량 카운터 표시 */
+#countBadge {
+  background: var(--surf3);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--text2);
+  white-space: nowrap;
+}
+#countBadge span { color: var(--accent); font-weight: 700; font-size: 14px; }
+
+/* ── 메인 영역 ── */
+#main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+#dropZone {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+#dropZone:hover { background: #1a1a1a; }
+#dropZone .drop-icon { font-size: 56px; opacity: 0.3; }
+#dropZone p { color: var(--text2); font-size: 15px; }
+#dropZone small { color: #555; font-size: 12px; }
+#fileInput { display: none; }
+
+/* 캔버스 영역 */
+#canvasWrap {
+  display: none;
+  flex: 1;
+  overflow: auto;
+  align-items: center;
+  justify-content: center;
+  background: #0d0d0d;
+  position: relative;
+}
+#canvasWrap.show { display: flex; }
+
+#mainCanvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  cursor: crosshair;
+}
+
+/* 텍스트 인풋 오버레이 */
+#textInput {
+  position: fixed;
+  display: none;
+  z-index: 999;
+  background: rgba(0,0,0,0.85);
+  border: 2px solid var(--accent);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: white;
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 16px;
+  outline: none;
+  min-width: 120px;
+}
+
+/* 툴팁 */
+.tip {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.75);
+  color: #ccc;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.tip.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- 상단 툴바 -->
+<div id="toolbar">
+  <!-- 파일 -->
+  <button class="action-btn" onclick="document.getElementById('fileInput').click()">📂 사진 열기</button>
+  <input type="file" id="fileInput" accept="image/*">
+
+  <div class="sep"></div>
+
+  <!-- 도구 버튼 -->
+  <button class="tool-btn active" id="btn-count" onclick="setTool('count')">
+    <span class="icon">🔢</span>수량체크
+  </button>
+  <button class="tool-btn" id="btn-line" onclick="setTool('line')">
+    <span class="icon">╱</span>직선
+  </button>
+  <button class="tool-btn" id="btn-arrow" onclick="setTool('arrow')">
+    <span class="icon">➡</span>화살표
+  </button>
+  <button class="tool-btn" id="btn-circle" onclick="setTool('circle')">
+    <span class="icon">⭕</span>원
+  </button>
+  <button class="tool-btn" id="btn-rect" onclick="setTool('rect')">
+    <span class="icon">⬜</span>사각형
+  </button>
+  <button class="tool-btn" id="btn-text" onclick="setTool('text')">
+    <span class="icon">T</span>텍스트
+  </button>
+  <button class="tool-btn" id="btn-eraser" onclick="setTool('eraser')">
+    <span class="icon">🗑</span>개별삭제
+  </button>
+
+  <div class="sep"></div>
+
+  <!-- 색상 -->
+  <div class="color-wrap">
+    <input type="color" id="colorPicker" value="#ff3333">
+    색상
+  </div>
+
+  <!-- 굵기 -->
+  <div class="slider-wrap">
+    <input type="range" id="thicknessSlider" min="1" max="20" value="3">
+    굵기 <span id="thicknessVal">3</span>px
+  </div>
+
+  <div class="sep"></div>
+
+  <!-- 수량 카운터 -->
+  <div id="countBadge">수량 총계: <span id="countNum">0</span>개</div>
+
+  <div class="sep"></div>
+
+  <!-- 되돌리기 -->
+  <button class="action-btn" id="undoBtn" onclick="undo()" disabled>↩ 되돌리기</button>
+  <button class="action-btn" id="clearBtn" onclick="clearAll()" disabled>🗑 전체삭제</button>
+
+  <!-- 저장 -->
+  <button class="action-btn btn-save" onclick="saveImage()">💾 저장</button>
+</div>
+
+<!-- 메인 -->
+<div id="main">
+  <!-- 드롭존 -->
+  <div id="dropZone" onclick="document.getElementById('fileInput').click()">
+    <div class="drop-icon">🖼</div>
+    <p>사진을 클릭하거나 드래그해서 불러오세요</p>
+    <small>JPG, PNG, WEBP 등 지원</small>
+  </div>
+
+  <!-- 캔버스 -->
+  <div id="canvasWrap">
+    <canvas id="mainCanvas"></canvas>
+  </div>
+</div>
+
+<!-- 텍스트 입력 -->
+<input type="text" id="textInput" placeholder="텍스트 입력 후 Enter">
+
+<!-- 툴팁 -->
+<div class="tip" id="tip"></div>
+
+<script>
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d');
+const fileInput = document.getElementById('fileInput');
+const colorPicker = document.getElementById('colorPicker');
+const thicknessSlider = document.getElementById('thicknessSlider');
+const thicknessVal = document.getElementById('thicknessVal');
+const undoBtn = document.getElementById('undoBtn');
+const clearBtn = document.getElementById('clearBtn');
+const countNum = document.getElementById('countNum');
+const textInputEl = document.getElementById('textInput');
+const tipEl = document.getElementById('tip');
+
+let baseImage = null;
+let annotations = [];   // 모든 마킹 저장
+let undoStack = [];     // 되돌리기 스택
+let currentTool = 'count';
+let countIndex = 1;
+let drawing = false;
+let startX, startY;
+let tempAnno = null;
+let textPos = null;
+let canvasRect = null;
+let scale = 1;
+
+// ── 툴 선택 ──
+function setTool(t) {
+  currentTool = t;
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + t)?.classList.add('active');
+  canvas.style.cursor = t === 'eraser' ? 'pointer' : 'crosshair';
+  const tips = {
+    count: '사진의 원하는 위치를 클릭하면 번호가 찍혀요',
+    line: '클릭 후 드래그해서 직선을 그으세요',
+    arrow: '클릭 후 드래그해서 화살표를 그으세요',
+    circle: '클릭 후 드래그해서 원을 그으세요',
+    rect: '클릭 후 드래그해서 사각형을 그으세요',
+    text: '원하는 위치를 클릭해서 텍스트를 입력하세요',
+    eraser: '삭제할 마킹을 클릭하세요',
+  };
+  showTip(tips[t]);
+}
+
+function showTip(msg) {
+  tipEl.textContent = msg;
+  tipEl.classList.add('show');
+  clearTimeout(tipEl._t);
+  tipEl._t = setTimeout(() => tipEl.classList.remove('show'), 3000);
+}
+
+// ── 슬라이더 ──
+thicknessSlider.addEventListener('input', () => {
+  thicknessVal.textContent = thicknessSlider.value;
+});
+
+// ── 파일 열기 ──
+fileInput.addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (file) loadImage(file);
+});
+
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.background = '#1f1f1f'; });
+dropZone.addEventListener('dragleave', () => { dropZone.style.background = ''; });
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.style.background = '';
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) loadImage(file);
+});
+
+function loadImage(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      baseImage = img;
+      canvas.width = img.width;
+      canvas.height = img.height;
+      annotations = [];
+      undoStack = [];
+      countIndex = 1;
+      updateCountBadge();
+      dropZone.style.display = 'none';
+      document.getElementById('canvasWrap').classList.add('show');
+      redraw();
+      updateButtons();
+      canvasRect = canvas.getBoundingClientRect();
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── 좌표 계산 ──
+function getPos(e) {
+  canvasRect = canvas.getBoundingClientRect();
+  scale = canvas.width / canvasRect.width;
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  return {
+    x: (clientX - canvasRect.left) * scale,
+    y: (clientY - canvasRect.top) * scale
+  };
+}
+
+// ── 마우스 이벤트 ──
+canvas.addEventListener('mousedown', onDown);
+canvas.addEventListener('mousemove', onMove);
+canvas.addEventListener('mouseup', onUp);
+canvas.addEventListener('touchstart', e => { e.preventDefault(); onDown(e); }, { passive: false });
+canvas.addEventListener('touchmove', e => { e.preventDefault(); onMove(e); }, { passive: false });
+canvas.addEventListener('touchend', e => { e.preventDefault(); onUp(e); }, { passive: false });
+
+function onDown(e) {
+  if (!baseImage) return;
+  const pos = getPos(e);
+
+  if (currentTool === 'text') {
+    textPos = pos;
+    showTextInput(e);
+    return;
+  }
+
+  if (currentTool === 'eraser') {
+    eraseAt(pos);
+    return;
+  }
+
+  if (currentTool === 'count') {
+    saveUndo();
+    annotations.push({
+      type: 'count',
+      x: pos.x, y: pos.y,
+      num: countIndex++,
+      color: colorPicker.value,
+      size: parseInt(thicknessSlider.value) + 12
+    });
+    updateCountBadge();
+    redraw();
+    updateButtons();
+    return;
+  }
+
+  drawing = true;
+  startX = pos.x;
+  startY = pos.y;
+}
+
+function onMove(e) {
+  if (!drawing) return;
+  const pos = getPos(e);
+  tempAnno = {
+    type: currentTool,
+    x1: startX, y1: startY,
+    x2: pos.x, y2: pos.y,
+    color: colorPicker.value,
+    thickness: parseInt(thicknessSlider.value)
+  };
+  redraw();
+  drawAnno(tempAnno, true);
+}
+
+function onUp(e) {
+  if (!drawing) return;
+  drawing = false;
+  if (tempAnno) {
+    saveUndo();
+    annotations.push({ ...tempAnno });
+    tempAnno = null;
+    redraw();
+    updateButtons();
+  }
+}
+
+// ── 텍스트 입력 ──
+function showTextInput(e) {
+  canvasRect = canvas.getBoundingClientRect();
+  scale = canvas.width / canvasRect.width;
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  textInputEl.style.display = 'block';
+  textInputEl.style.left = clientX + 'px';
+  textInputEl.style.top = (clientY - 40) + 'px';
+  textInputEl.style.fontSize = (parseInt(thicknessSlider.value) * 3 + 12) + 'px';
+  textInputEl.style.color = colorPicker.value;
+  textInputEl.value = '';
+  textInputEl.focus();
+}
+
+textInputEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    const txt = textInputEl.value.trim();
+    if (txt && textPos) {
+      saveUndo();
+      annotations.push({
+        type: 'text',
+        x: textPos.x, y: textPos.y,
+        text: txt,
+        color: colorPicker.value,
+        size: parseInt(thicknessSlider.value) * 3 + 14
+      });
+      redraw();
+      updateButtons();
+    }
+    textInputEl.style.display = 'none';
+    textInputEl.value = '';
+  }
+  if (e.key === 'Escape') {
+    textInputEl.style.display = 'none';
+    textInputEl.value = '';
+  }
+});
+
+// ── 개별 삭제 ──
+function eraseAt(pos) {
+  // 가장 가까운 마킹 찾아 삭제
+  let closest = -1;
+  let minDist = 30 * (canvas.width / (canvasRect?.width || canvas.width)); // 히트 영역
+
+  for (let i = annotations.length - 1; i >= 0; i--) {
+    const a = annotations[i];
+    let dist = Infinity;
+
+    if (a.type === 'count' || a.type === 'text') {
+      dist = Math.hypot(pos.x - a.x, pos.y - a.y);
+    } else {
+      // 선분 기반 (중간점 기준 간단 처리)
+      const mx = (a.x1 + a.x2) / 2;
+      const my = (a.y1 + a.y2) / 2;
+      dist = Math.hypot(pos.x - mx, pos.y - my);
+    }
+
+    if (dist < minDist) {
+      minDist = dist;
+      closest = i;
+    }
+  }
+
+  if (closest !== -1) {
+    saveUndo();
+    // 수량체크 삭제시 번호 재정렬
+    const deleted = annotations[closest];
+    annotations.splice(closest, 1);
+    if (deleted.type === 'count') reindexCounts();
+    redraw();
+    updateCountBadge();
+    updateButtons();
+  }
+}
+
+function reindexCounts() {
+  let n = 1;
+  for (let a of annotations) {
+    if (a.type === 'count') a.num = n++;
+  }
+  countIndex = n;
+}
+
+// ── 되돌리기 ──
+function saveUndo() {
+  undoStack.push(JSON.stringify({ annotations, countIndex }));
+  if (undoStack.length > 50) undoStack.shift();
+}
+
+function undo() {
+  if (undoStack.length === 0) return;
+  const prev = JSON.parse(undoStack.pop());
+  annotations = prev.annotations;
+  countIndex = prev.countIndex;
+  redraw();
+  updateCountBadge();
+  updateButtons();
+}
+
+function clearAll() {
+  if (annotations.length === 0) return;
+  saveUndo();
+  annotations = [];
+  countIndex = 1;
+  redraw();
+  updateCountBadge();
+  updateButtons();
+}
+
+function updateButtons() {
+  undoBtn.disabled = undoStack.length === 0;
+  clearBtn.disabled = annotations.length === 0;
+}
+
+function updateCountBadge() {
+  const cnt = annotations.filter(a => a.type === 'count').length;
+  countNum.textContent = cnt;
+}
+
+// ── 그리기 ──
+function redraw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (baseImage) ctx.drawImage(baseImage, 0, 0);
+  for (const a of annotations) drawAnno(a, false);
+}
+
+function drawAnno(a, isTemp) {
+  ctx.save();
+  ctx.globalAlpha = isTemp ? 0.7 : 1;
+
+  if (a.type === 'count') {
+    const r = a.size || 16;
+    // 원
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = a.color;
+    ctx.fill();
+    // 테두리
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // 숫자
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${Math.round(r * 1.1)}px Noto Sans KR`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(a.num, a.x, a.y);
+
+  } else if (a.type === 'line') {
+    ctx.beginPath();
+    ctx.moveTo(a.x1, a.y1);
+    ctx.lineTo(a.x2, a.y2);
+    ctx.strokeStyle = a.color;
+    ctx.lineWidth = a.thickness;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+  } else if (a.type === 'arrow') {
+    drawArrow(a.x1, a.y1, a.x2, a.y2, a.color, a.thickness);
+
+  } else if (a.type === 'circle') {
+    const rx = Math.abs(a.x2 - a.x1) / 2;
+    const ry = Math.abs(a.y2 - a.y1) / 2;
+    const cx = (a.x1 + a.x2) / 2;
+    const cy = (a.y1 + a.y2) / 2;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx || 1, ry || 1, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = a.color;
+    ctx.lineWidth = a.thickness;
+    ctx.stroke();
+
+  } else if (a.type === 'rect') {
+    ctx.beginPath();
+    ctx.strokeStyle = a.color;
+    ctx.lineWidth = a.thickness;
+    ctx.strokeRect(a.x1, a.y1, a.x2 - a.x1, a.y2 - a.y1);
+
+  } else if (a.type === 'text') {
+    ctx.fillStyle = a.color;
+    ctx.font = `bold ${a.size}px Noto Sans KR`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    // 그림자
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetX = 1;
+    ctx.shadowOffsetY = 1;
+    ctx.fillText(a.text, a.x, a.y);
+  }
+
+  ctx.restore();
+}
+
+function drawArrow(x1, y1, x2, y2, color, thickness) {
+  const headLen = Math.max(thickness * 4, 14);
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = thickness;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 6), y2 - headLen * Math.sin(angle - Math.PI / 6));
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 6), y2 - headLen * Math.sin(angle + Math.PI / 6));
+  ctx.strokeStyle = color;
+  ctx.lineWidth = thickness;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+}
+
+// ── 저장 ──
+function saveImage() {
+  if (!baseImage) { alert('사진을 먼저 불러오세요'); return; }
+  const link = document.createElement('a');
+  link.download = '현장편집_' + Date.now() + '.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+
+// ── 키보드 단축키 ──
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+});
+
+// 윈도우 리사이즈시 좌표 재계산
+window.addEventListener('resize', () => {
+  canvasRect = canvas.getBoundingClientRect();
+});
+</script>
+</body>
+</html>
